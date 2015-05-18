@@ -3,7 +3,6 @@ import json
 import re
 import subprocess
 import uuid
-import base64
 
 # check for repos.json
 if not os.path.isfile('repos.json'):
@@ -26,7 +25,7 @@ def init():
     ignore = open(repo['dummy_repo'] + os.path.sep + '.gitignore', 'w+')
     ignore.write(".DS_Store\n")
     ignore.close()
-    
+
     subprocess.call([
         'git',
         'add',
@@ -101,7 +100,7 @@ for repo in repos:
                 '--pretty=format:%an||||%ae||||%ad||||%s||||%f-%h'
             ])
 
-        log_split = log_output.decode('utf-8').split('\n')
+        log_split = log_output.split('\n')
 
         print("Log Split Length: {}".format(len(log_split)))
 
@@ -124,24 +123,16 @@ for repo in repos:
                     'email': commit_line[1],
                     'date': commit_line[2],
                     'message': commit_line[3],
-                    'filename': commit_line[4]
+                    'filename': uuid.uuid4().hex
                 })
 
     if len(commits) > 0:
         for commit in commits:
             private_commit_message = 'Commit message is private'
-            
-            #this modification checks if commit message has a greater character length than Mac OS limit for filenames (=255)
-            #may be useful for other OS
-            #without this change, for very long commit messages it will throw error: IOError: [Errno 63] File name too long 
-            if len(commit['filename']) > 200:
-               fullStr =  commit['filename']; commit['filename'] = fullStr[:200]
-
-            if repo['random_file_name']:
-                commit['filename'] = base64.urlsafe_b64encode(uuid.uuid4().bytes).replace('=', '')
+            commit_file = repo['dummy_repo_data'] + os.path.sep + commit['filename'] + repo['dummy_ext']
 
             os.chdir(repo['dummy_repo_data'])
-            if not os.path.isfile(repo['dummy_repo_data'] + os.path.sep + commit['filename'] + repo['dummy_ext']):
+            if not os.path.isfile(commit_file):
                 emailcheck = False
                 for email in repo['target_email']:
                     if email == commit['email']:
@@ -150,10 +141,9 @@ for repo in repos:
                 if emailcheck:
                     # file doesn't already exist
                     if repo['hide_commits'] is not True:
-                        private_commit_message = commit['filename']+"\n"+commit['message'].replace("@","[at]")
+                        private_commit_message = commit['filename'] + "\n" + commit['message'].replace("@", "[at]")
                     print("PRIVATE COMMIT MESSAGE: "+private_commit_message)
-                    dummyfile = repo['dummy_repo_data'] + os.path.sep + commit['filename'][:120] + repo['dummy_ext']
-                    dummyfile = open(dummyfile, 'w+')
+                    dummyfile = open(commit_file, 'w+')
                     dummyfile.write(repo['dummy_code'])
                     dummyfile.close()
                     subprocess.call([
@@ -178,6 +168,13 @@ for repo in repos:
                         '--date',
                         commit['date']
                     ])
+
+                    subprocess.call([
+                        'git',
+                        'rm',
+                        commit['filename']+repo['dummy_ext']
+                    ])
+
 
         if repo['auto_push'] is True:
             if repo['force'] is True:
